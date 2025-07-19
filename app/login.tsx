@@ -1,18 +1,21 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [step, setStep] = useState(1); 
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Create refs for each input
+  const inputRefs = useRef<(TextInput | null)[]>([]);
 
   const handleBack = () => {
     if (step === 2) {
       setStep(1);
-      setCode("");
+      setCode(["", "", "", "", "", ""]);
     } else {
       router.back();
     }
@@ -42,15 +45,47 @@ export default function Login() {
     }, 1000);
   };
 
+  const handleCodeChange = (text: string, index: number) => {
+    // Only allow numbers and single character
+    if (text.length > 1) return;
+    if (text && !/^\d$/.test(text)) return;
+
+    const newCode = [...code];
+    newCode[index] = text;
+    setCode(newCode);
+
+    // Auto-focus next input
+    if (text && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyPress = (e: any, index: number) => {
+    // Handle backspace to go to previous input
+    if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
   const handleVerifyCode = () => {
-    if (!code) {
-      Alert.alert("Error", "Please enter the code");
+    const fullCode = code.join("");
+    if (fullCode.length !== 6) {
+      Alert.alert("Error", "Please enter the complete 6-digit code");
       return;
     }
     
     // Here you would typically verify the code
     router.push("/(protected)/home" as any);
   };
+
+  // Auto-submit when all digits are filled
+  useEffect(() => {
+    const fullCode = code.join("");
+    if (fullCode.length === 6) {
+      // Optional: Auto-submit after a short delay
+      // setTimeout(() => handleVerifyCode(), 500);
+    }
+  }, [code]);
 
   return (
     <ImageBackground
@@ -106,33 +141,45 @@ export default function Login() {
                   We sent a code to {email}
                 </Text>
 
-                <View style={styles.form}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter 6-digit code"
-                    placeholderTextColor="#666666"
-                    value={code}
-                    onChangeText={setCode}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                  />
+                <View style={styles.codeContainer}>
+                  {code.map((digit, index) => (
+                    <TextInput
+                      key={index}
+                      ref={(ref) => { inputRefs.current[index] = ref; }}
+                      style={[
+                        styles.codeInput,
+                        digit ? styles.codeInputFilled : null
+                      ]}
+                      value={digit}
+                      onChangeText={(text) => handleCodeChange(text, index)}
+                      onKeyPress={(e) => handleKeyPress(e, index)}
+                      keyboardType="number-pad"
+                      maxLength={1}
+                      textAlign="center"
+                      selectTextOnFocus
+                    />
+                  ))}
                 </View>
               </View>
 
               <View style={styles.buttonContainer}>
                 <TouchableOpacity 
-                  style={[styles.button, styles.secondaryButton, isLoading && styles.buttonDisabled]} 
+                  style={styles.resendButton} 
                   onPress={handleGetCodeAgain}
                   disabled={isLoading}
                 >
-                  <Text style={[styles.buttonText, styles.secondaryButtonText]}>
+                  <Text style={styles.resendButtonText}>
                     {isLoading ? "Sending..." : "Get Code Again"}
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
-                  style={[styles.button, isLoading && styles.buttonDisabled]} 
+                  style={[
+                    styles.button, 
+                    (isLoading || code.join("").length !== 6) && styles.buttonDisabled
+                  ]} 
                   onPress={handleVerifyCode}
+                  disabled={isLoading || code.join("").length !== 6}
                 >
                   <Text style={styles.buttonText}>Verify Code →</Text>
                 </TouchableOpacity>
@@ -211,8 +258,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(0, 0, 0, 0.1)",
   },
-  buttonContainer: {
-    width: "100%",
+  codeContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  codeInput: {
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 12,
+    width: 45,
+    height: 55,
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#000",
+    borderWidth: 2,
+    borderColor: "rgba(0, 0, 0, 0.1)",
+  },
+  codeInputFilled: {
+    borderColor: "#000",
+    backgroundColor: "rgba(255, 255, 255, 1)",
   },
   button: {
     backgroundColor: "#000",
@@ -220,7 +285,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 80,
     borderRadius: 50,
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 20,
+  },
+  buttonContainer: {
+    alignItems: "center",
   },
   buttonDisabled: {
     backgroundColor: "#666666",
@@ -230,12 +298,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "600",
   },
-  secondaryButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderWidth: 2,
-    borderColor: "#000",
+  resendButton: {
+    backgroundColor: "#000",
+    paddingVertical: 18,
+    paddingHorizontal: 80,
+    borderRadius: 50,
+    alignItems: "center",
+    marginBottom: 20,
   },
-  secondaryButtonText: {
-    color: "#000",
+  resendButtonText: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "600",
   },
 });
